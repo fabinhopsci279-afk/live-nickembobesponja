@@ -61,7 +61,7 @@
       <video id="video" controls playsinline></video>
       <div class="msg" id="msg"></div>
       <div class="badge">
-        <span class="badge-el cnt" id="cnt" style="display:none">0 espectadores</span>
+        <div class="cnt" id="cnt" style="display:none">0 espectadores</div>
       </div>
     </div>
 
@@ -123,16 +123,32 @@
       }
     }
 
+    var current = null;
     function connectWS() {
       try {
         var ws = new WebSocket(WS_URL);
-        ws.onopen = function () { setInterval(function () { ws.send(JSON.stringify({ type: "ping" })); }, 30000); };
+        ws.onopen = function () {
+          setInterval(function () { try { ws.send(JSON.stringify({ type: "PING" })); } catch (e) {} }, 30000);
+        };
         ws.onmessage = function (e) {
           try {
             var d = JSON.parse(e.data);
-            if (d.type === "viewerCountUpdate") { cnt.style.display = "inline"; cnt.textContent = d.viewerCount + " espectadores"; }
-            if (d.type === "onlineStatus") { showOnline(!!d.online); }
-            if (d.type === "ping") { showOnline(true); }
+            var t = d.type ? d.type.toLowerCase() : "";
+            if (t.indexOf("count") >= 0 || t.indexOf("viewer") >= 0) {
+              if (typeof d.viewerCount === "number" || typeof d.count === "number") {
+                current = typeof d.viewerCount === "number" ? d.viewerCount : d.count;
+                cnt.style.display = "inline"; cnt.textContent = current + " espectadores";
+              }
+            }
+            if (t === "user_joined") {
+              current = current === null ? 1 : current + 1;
+              cnt.style.display = "inline"; cnt.textContent = current + " espectadores";
+            }
+            if (t === "user_parted") {
+              if (current !== null) { current = Math.max(0, current - 1); cnt.style.display = "inline"; cnt.textContent = current + " espectadores"; }
+            }
+            if (t === "ping") { showOnline(true); }
+            if (t === "onlineStatus" || t === "offline") { showOnline(!!d.online); }
           } catch (err) {}
         };
         ws.onclose = function () { setTimeout(connectWS, 8000); };
