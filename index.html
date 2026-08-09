@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nick@BobEsponja 24h - Ao Vivo</title>
+  <style>
+    :root {
+      --bg: #0f1014; --panel: #16171d; --border: #262833;
+      --accent: #7a5cf3; --green: #22c55e; --red: #ef4444; --text: #e5e7eb; --muted: #9ca3af;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .logo { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #2386e2);
+            display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
+    h1 { font-size: 20px; margin: 0; }
+    .sub { color: var(--muted); font-size: 14px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+            font-size: 13px; font-weight: 700; background: rgba(34,197,94,.12); color: var(--green); }
+    .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: blink 1.2s infinite; }
+    @keyframes blink { 50% { opacity: .25; } }
+    .wrap-video { position: relative; background: #000; border-radius: 14px; overflow: hidden;
+                  border: 1px solid var(--accent); }
+    video { width: 100%; aspect-ratio: 16/9; display: block; background: #000; }
+    .badge { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; gap: 8px; }
+    .badge>div { padding: 5px 11px; border-radius: 8px; font-size: 13px; font-weight: 700;
+                 background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
+    .online { color: var(--green); } .offline { color: var(--red); }
+    .cnt { color: #fff; }
+    .tags { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .tag { padding: 4px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--accent);
+           color: var(--muted); font-size: 13px; }
+    .links { margin-top: 14px; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px;
+             padding: 12px 16px; }
+    .links h3 { margin: 0 0 8px; font-size: 15px; }
+    .links code { display: block; background: #0b0c10; padding: 8px 10px; border-radius: 8px; font-size: 12px;
+                  color: #7ce0ff; word-break: break-all; margin-bottom: 8px; }
+    a.btn { display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
+            padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-right: 8px; }
+    footer { margin-top: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+    .msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+           background: #000; color: #fff; font-size: 15px; z-index: 4; padding: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">🍍</div>
+      <div>
+        <h1>Nick@BobEsponja 24h</h1>
+        <div class="sub">Canal ao vivo - desenhos - Brasil</div>
+      </div>
+      <div style="flex:1"></div>
+      <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">Conectando...</span></span>
+    </header>
+
+    <div class="wrap-video">
+      <video id="video" controls playsinline></video>
+      <div class="msg" id="msg"></div>
+      <div class="badge">
+        <span class="badge-el cnt" id="cnt" style="display:none">0 espectadores</span>
+      </div>
+    </div>
+
+    <div class="tags">
+      <span class="tag">#nickelodeon</span>
+      <span class="tag">#paramount</span>
+      <span class="tag">#24h</span>
+      <span class="tag">#brasil</span>
+      <span class="tag">#desenhos</span>
+    </div>
+
+    <div class="links">
+      <h3>Links de transmissão (IPTV / VLC / TV)</h3>
+      <code id="m3u8Line">carregando...</code>
+      <a class="btn" id="m3uLink" href="#">Baixar lista .m3u</a>
+      <a class="btn" href="#" onclick="window.open('https://vlc.android.net', '_blank').focus();return false;">VLC (Android/TV)</a>
+    </div>
+
+    <footer>Streaming próprio (Owncast) - página feita no GitHub Pages</footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <script>
+    var BASE = "https://circulation-infants-flowers-messenger.trycloudflare.com";
+    var M3U8 = BASE + "/hls/stream.m3u8";
+    var WS_URL = "wss://" + BASE.replace(/^https?:\/\//, "") + "/ws";
+    var video = document.getElementById("video");
+    var m3u8Line = document.getElementById("m3u8Line");
+    var m3uLink = document.getElementById("m3uLink");
+    var statusText = document.getElementById("statusText");
+    var statusPill = document.getElementById("statusPill");
+    var cnt = document.getElementById("cnt");
+    var msg = document.getElementById("msg");
+
+    m3u8Line.textContent = M3U8;
+    m3uLink.href = location.origin + location.pathname.replace(/[^/]*$/, "") + "live.m3u";
+
+    function setOnline(on) {
+      statusPill.classList.remove("offline");
+      statusText.textContent = on ? "AO VIVO" : "OFFLINE (aguardando retomada do sinal)";
+      if (on) statusPill.style.color = "";
+    }
+
+    function playWithHls() {
+      msg.style.display = "none";
+      if (window.Hls && Hls.isSupported()) {
+        var hls = new Hls({ liveDurationInfinity: true, maxLiveSyncPlaybackRate: 1.5 });
+        hls.loadSource(M3U8);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, function (e, d) {
+          if (d.fatal) { msg.textContent = "Sinal indisponível no momento, tentando de novo..."; msg.style.display = "flex"; setTimeout(function () { hls.startLoad(); }, 4000); }
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, function () { if (!video.paused) video.play(); });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = M3U8;
+      } else {
+        msg.textContent = "Seu navegador não suporta HLS - copie o link m3u8 e use o VLC.";
+        msg.style.display = "flex";
+      }
+    }
+
+    function connectWS() {
+      try {
+        var ws = new WebSocket(WS_URL);
+        ws.onopen = function () { setInterval(function () { ws.send(JSON.stringify({ type: "ping" })); }, 30000); };
+        ws.onmessage = function (e) {
+          try {
+            var d = JSON.parse(e.data);
+            if (d.type === "viewerCountUpdate") { cnt.style.display = "inline"; cnt.textContent = d.viewerCount + " espectadores"; }
+            if (d.type === "onlineStatus") { showOnline(!!d.online); }
+            if (d.type === "ping") { showOnline(true); }
+          } catch (err) {}
+        };
+        ws.onclose = function () { setTimeout(connectWS, 8000); };
+      } catch (err) {}
+    }
+
+    function showOnline(on) {
+      setOnline(on);
+      if (!on) { cnt.style.display = "none"; }
+    }
+
+    video.addEventListener("playing", function () { msg.style.display = "none"; setOnline(true); });
+    video.addEventListener("waiting", function () { setOnline(true); });
+    playWithHls();
+    connectWS();
+  </script>
+</body>
+</html>
